@@ -1,0 +1,244 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  role          String
+  employeeId    String?        @unique
+  createdAt     DateTime       @default(now())
+  auditLogs     AuditLog[]
+  notifications Notification[]
+  employee      Employee?      @relation(fields: [employeeId], references: [id])
+
+  @@map("users")
+}
+
+model Department {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  managerId String?
+  createdAt DateTime   @default(now())
+  manager   Employee?  @relation("DepartmentManager", fields: [managerId], references: [id])
+  employees Employee[] @relation("DepartmentEmployees")
+
+  @@map("departments")
+}
+
+model Employee {
+  id                    String               @id @default(uuid())
+  name                  String
+  departmentId          String?
+  designation           String
+  capacityHours         Float                @default(40.0)
+  availability          Boolean              @default(true)
+  createdAt             DateTime             @default(now())
+  managedDepartments    Department[]         @relation("DepartmentManager")
+  skills                EmployeeSkill[]
+  department            Department?          @relation("DepartmentEmployees", fields: [departmentId], references: [id])
+  ownedGoals            Goal[]               @relation("GoalOwner")
+  productivityRecords   ProductivityRecord[]
+  targetRecommendations Recommendation[]     @relation("TargetEmployee")
+  assignedTasks         Task[]               @relation("TaskAssignee")
+  user                  User?
+  workloadRecords       WorkloadRecord[]
+
+  @@map("employees")
+}
+
+model Skill {
+  id             String          @id @default(uuid())
+  name           String          @unique
+  employeeSkills EmployeeSkill[]
+
+  @@map("skills")
+}
+
+model EmployeeSkill {
+  id          String   @id @default(uuid())
+  employeeId  String
+  skillId     String
+  proficiency String
+  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, skillId])
+  @@map("employee_skills")
+}
+
+model Goal {
+  id              String           @id @default(uuid())
+  title           String
+  description     String?
+  priority        String           @default("MEDIUM")
+  startDate       DateTime         @default(now())
+  deadline        DateTime
+  level           String
+  parentGoalId    String?
+  ownerId         String?
+  status          String           @default("NOT_STARTED")
+  createdAt       DateTime         @default(now())
+  owner           Employee?        @relation("GoalOwner", fields: [ownerId], references: [id])
+  parentGoal      Goal?            @relation("GoalHierarchy", fields: [parentGoalId], references: [id])
+  childGoals      Goal[]           @relation("GoalHierarchy")
+  milestones      Milestone[]
+  recommendations Recommendation[]
+  riskAssessments RiskAssessment[]
+
+  @@map("goals")
+}
+
+model Milestone {
+  id       String   @id @default(uuid())
+  goalId   String
+  title    String
+  deadline DateTime
+  status   String   @default("NOT_STARTED")
+  goal     Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  tasks    Task[]
+
+  @@map("milestones")
+}
+
+model Task {
+  id                 String           @id @default(uuid())
+  milestoneId        String
+  title              String
+  description        String?
+  assignedEmployeeId String?
+  priority           String           @default("MEDIUM")
+  complexity         String           @default("MEDIUM")
+  estimatedEffort    Float            @default(8.0)
+  deadline           DateTime
+  status             String           @default("NOT_STARTED")
+  progressPct        Float            @default(0.0)
+  createdAt          DateTime         @default(now())
+  impactChains       ImpactChain[]
+  recommendations    Recommendation[]
+  reverseDeps        TaskDependency[] @relation("PrerequisiteTask")
+  dependencies       TaskDependency[] @relation("DependentTask")
+  assignedEmployee   Employee?        @relation("TaskAssignee", fields: [assignedEmployeeId], references: [id])
+  milestone          Milestone        @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  @@map("tasks")
+}
+
+model TaskDependency {
+  id              String @id @default(uuid())
+  taskId          String
+  dependsOnTaskId String
+  dependsOnTask   Task   @relation("PrerequisiteTask", fields: [dependsOnTaskId], references: [id], onDelete: Cascade)
+  task            Task   @relation("DependentTask", fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, dependsOnTaskId])
+  @@map("task_dependencies")
+}
+
+model WorkloadRecord {
+  id          String   @id @default(uuid())
+  employeeId  String
+  timestamp   DateTime @default(now())
+  activeTasks Int      @default(0)
+  score       Float
+  state       String
+  factorsJson String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("workload_records")
+}
+
+model ProductivityRecord {
+  id          String   @id @default(uuid())
+  employeeId  String
+  timestamp   DateTime @default(now())
+  score       Float
+  factorsJson String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("productivity_records")
+}
+
+model RiskAssessment {
+  id          String   @id @default(uuid())
+  goalId      String
+  timestamp   DateTime @default(now())
+  riskLevel   String
+  score       Float
+  reasonsJson String
+  goal        Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@map("risk_assessments")
+}
+
+model ImpactChain {
+  id                 String   @id @default(uuid())
+  sourceTaskId       String
+  affectedEntityType String
+  affectedEntityId   String
+  impactDescription  String
+  createdAt          DateTime @default(now())
+  sourceTask         Task     @relation(fields: [sourceTaskId], references: [id], onDelete: Cascade)
+
+  @@map("impact_chains")
+}
+
+model Recommendation {
+  id               String                  @id @default(uuid())
+  goalId           String?
+  taskId           String?
+  type             String
+  targetEmployeeId String?
+  reasonJson       String
+  status           String                  @default("PENDING")
+  createdAt        DateTime                @default(now())
+  outcomes         RecommendationOutcome[]
+  targetEmployee   Employee?               @relation("TargetEmployee", fields: [targetEmployeeId], references: [id])
+  task             Task?                   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  goal             Goal?                   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@map("recommendations")
+}
+
+model RecommendationOutcome {
+  id                String         @id @default(uuid())
+  recommendationId  String
+  previousStateJson String
+  newStateJson      String
+  outcome           String
+  recordedAt        DateTime       @default(now())
+  recommendation    Recommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@map("recommendation_outcomes")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String
+  entityType  String
+  entityId    String?
+  detailsJson String?
+  timestamp   DateTime @default(now())
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
