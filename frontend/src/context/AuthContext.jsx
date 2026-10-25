@@ -34,6 +34,15 @@ export function AuthProvider({ children }) {
     return loggedUser;
   };
 
+  const loginWithGoogle = async (credential) => {
+    const res = await api.post('/auth/google', { credential });
+    const { token, user: loggedUser } = res.data;
+    localStorage.setItem('scpgms_token', token);
+    localStorage.setItem('scpgms_user', JSON.stringify(loggedUser));
+    setUser(loggedUser);
+    return loggedUser;
+  };
+
   const logout = async () => {
     try {
       await api.post('/auth/logout');
@@ -47,7 +56,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, loginWithGoogle, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

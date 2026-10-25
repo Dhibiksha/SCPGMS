@@ -19,18 +19,26 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Configure CORS for production deployment
+// Configure CORS for development and production deployment
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
   : '*';
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins === '*' || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS origin ${origin} not allowed`));
+    if (!origin) return callback(null, true);
+
+    // Always allow any localhost / 127.0.0.1 port in development (e.g. 5173, 5174, 5175)
+    const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin);
+    if (process.env.NODE_ENV !== 'production' && isLocalhost) {
+      return callback(null, true);
     }
+
+    if (allowedOrigins === '*' || allowedOrigins.includes(origin) || (Array.isArray(allowedOrigins) && allowedOrigins.includes('*'))) {
+      return callback(null, true);
+    }
+
+    callback(new Error(`CORS origin ${origin} not allowed`));
   },
   credentials: true
 }));
